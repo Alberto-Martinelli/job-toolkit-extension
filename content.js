@@ -252,6 +252,10 @@ const savedCities = root.querySelector(".saved-cities");
 
 // 2. Read page data
 function getDescriptionBox() {
+  // Classic search uses a dedicated description container rather than the
+  // expandable-text component. The inner block excludes its section heading.
+  const classicDescription = document.querySelector("#job-details");
+  if (classicDescription) return classicDescription.querySelector(".mt4") || classicDescription;
   // Search results contain other expandable blocks (profile matches, etc.).
   const heading = [...document.querySelectorAll("h2")]
     .find(el => el.textContent.trim().toLowerCase() === "about the job");
@@ -589,6 +593,10 @@ function parseCities(value) {
 }
 
 function getCardCity(card) {
+  const classicMetadata = card.querySelector(".job-card-container__metadata-wrapper");
+  if (classicMetadata) {
+    return normalizeCity(classicMetadata.textContent.replace(/\([^)]*\)/g, "").split(",")[0]);
+  }
   // In the supplied cards, the title's wrapper, company row and location
   // paragraph share one parent. Avoid generated CSS classes and other text
   // such as the company name, salary badges and posting date.
@@ -606,20 +614,35 @@ function restoreCityElement(element, previous) {
   hiddenCityElements.delete(element);
 }
 
+function getSearchCards() {
+  const cards = [];
+  const list = document.querySelector('[componentkey="SearchResultsMainContent"]');
+  for (const card of list?.querySelectorAll('[role="button"][componentkey^="job-card-component-ref-"]') || []) {
+    let item = card;
+    while (item.parentElement && item.parentElement !== list) item = item.parentElement;
+    cards.push({ card, item });
+  }
+  const classicList = document.querySelector(".scaffold-layout__list");
+  // Only count rendered cards: empty occludable list items must remain visible
+  // so LinkedIn can populate them as the user scrolls.
+  for (const card of classicList?.querySelectorAll(".job-card-container[data-job-id]") || []) {
+    const item = card.closest("li[data-occludable-job-id]");
+    if (item) cards.push({ card, item });
+  }
+  return cards;
+}
+
 function applyCityFilter() {
   const toHide = new Set();
   let total = 0, matching = 0, unknown = 0;
   if (isSearchView() && activeCities.size) {
-    const list = document.querySelector('[componentkey="SearchResultsMainContent"]');
-    for (const card of list?.querySelectorAll('[role="button"][componentkey^="job-card-component-ref-"]') || []) {
+    for (const { card, item } of getSearchCards()) {
       total++;
       const city = getCardCity(card);
       if (!city) unknown++;
       if (city && activeCities.has(city)) { matching++; continue; }
       // Hide the complete list item and its divider, without touching the
       // selected job's detail panel or invoking LinkedIn's dismiss action.
-      let item = card;
-      while (item.parentElement && item.parentElement !== list) item = item.parentElement;
       toHide.add(item);
       if (item.nextElementSibling?.tagName === "HR") toHide.add(item.nextElementSibling);
     }
