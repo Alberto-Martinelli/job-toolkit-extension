@@ -6,6 +6,9 @@ const ICON_DESCRIPTION = `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none
 const ICON_ARROW = `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
 const ICON_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
 const ICON_ERROR = `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>`;
+const ICON_PLUS = `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+const ICON_PIN = `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
+const ICON_EDIT = `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/></svg>`;
 const ICON_GRIP = `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
 const ICON_CHEVRON = `<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 2.8 9.1 7l-4.2 4.2"/></svg>`;
 
@@ -145,6 +148,28 @@ root.innerHTML = `
   .city-actions { display: flex; gap: 6px; }
   .city-actions .action-btn { flex: 1; justify-content: center; }
   .city-hint, .city-status { margin: 0; color: #6b7280; font-size: 11px; line-height: 1.5; }
+  .city-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .city-add {
+    width: 28px; height: 28px; padding: 0 5px; border-radius: 14px;
+    gap: 6px; overflow: hidden; white-space: nowrap;
+    transition: width 180ms ease, background 160ms, border-color 160ms;
+  }
+  .city-add span { opacity: 0; transition: opacity 120ms; }
+  .city-add:hover, .city-add:focus-visible { width: 142px; }
+  .city-add:hover span, .city-add:focus-visible span { opacity: 1; }
+  .city-editor { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid #dce1e6; border-radius: 4px; }
+  .city-editor[hidden], .saved-cities[hidden] { display: none; }
+  .saved-cities { display: flex; flex-wrap: wrap; gap: 6px; }
+  .saved-city { display: flex; width: max-content; min-width: 0; max-width: calc((100% - 6px) / 2); }
+  .saved-city-restore { width: auto; min-width: 0; height: 30px; padding: 0 8px; gap: 6px; border-radius: 4px 0 0 4px; }
+  .saved-city-restore span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .saved-city-restore[aria-pressed="true"] { background: #eef2f6; border-color: #64748b; color: #111827; }
+  .saved-city-rename, .saved-city-remove { width: 26px; height: 30px; padding: 0; flex-shrink: 0; justify-content: center; border-left: 0; border-radius: 0; }
+  .saved-city-remove { border-radius: 0 4px 4px 0; }
+  .saved-city-rename svg, .saved-city-remove svg { width: 12px; height: 12px; }
+  @media (prefers-reduced-motion: reduce) {
+    .city-add, .city-add span { transition: none; }
+  }
 </style>
 
 <div class="tab">
@@ -173,7 +198,22 @@ root.innerHTML = `
       </div>
     </form>
     <form class="city-filter" hidden>
-      <label class="time-label" for="city-list">Filter by city</label>
+      <div class="city-heading">
+        <label class="time-label" for="city-list">Filter by city</label>
+        <button class="action-btn city-add" type="button" aria-label="Add new filter" aria-expanded="false" aria-controls="city-editor">${ICON_PLUS}<span>Add new filter</span></button>
+      </div>
+      <div class="saved-cities" role="group" aria-label="Saved city filters" hidden></div>
+      <div id="city-editor" class="city-editor" hidden>
+        <label class="time-label" for="city-filter-name">Filter name</label>
+        <input id="city-filter-name" class="time-input city-name-input" type="text" maxlength="80" placeholder="e.g. Europe" autocomplete="off">
+        <label class="time-label" for="saved-city-list">Cities to save</label>
+        <textarea id="saved-city-list" class="time-input city-input city-preset-input" rows="3" placeholder="Milan, Athens, Berlin"></textarea>
+        <div class="city-actions">
+          <button class="action-btn city-save" type="button">Save filter</button>
+          <button class="action-btn city-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+      <p class="city-save-status city-hint" role="status" aria-live="polite"></p>
       <textarea id="city-list" class="time-input city-input" rows="3" placeholder="Milan, Athens, Berlin" aria-describedby="city-hint city-status" required></textarea>
       <p id="city-hint" class="city-hint">Separate cities with commas or new lines. Filters loaded results only.</p>
       <div class="city-actions">
@@ -198,9 +238,17 @@ const copyTitleBtn = root.querySelector(".copy-title-btn");
 const timeForm = root.querySelector(".time-filter");
 const timeInput = root.querySelector(".time-input");
 const cityForm = root.querySelector(".city-filter");
-const cityInput = root.querySelector(".city-input");
+const cityInput = root.querySelector("#city-list");
 const cityReset = root.querySelector(".city-reset");
 const cityStatus = root.querySelector(".city-status");
+const cityAdd = root.querySelector(".city-add");
+const cityEditor = root.querySelector(".city-editor");
+const cityPresetInput = root.querySelector(".city-preset-input");
+const cityNameInput = root.querySelector(".city-name-input");
+const citySave = root.querySelector(".city-save");
+const cityCancel = root.querySelector(".city-cancel");
+const citySaveStatus = root.querySelector(".city-save-status");
+const savedCities = root.querySelector(".saved-cities");
 
 // 2. Read page data
 function getDescriptionBox() {
@@ -356,6 +404,176 @@ timeForm.addEventListener("submit", (event) => {
 // City filtering is local to loaded search results; it does not change LinkedIn's search.
 let activeCities = new Set();
 const hiddenCityElements = new Map();
+const SAVED_CITY_FILTERS_KEY = "jobToolkitSavedCityFilters";
+let savedCityFilters = readSavedCityFilters();
+let renamingCityFilter = null;
+
+function readSavedCityFilters() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVED_CITY_FILTERS_KEY) || "[]");
+    if (!Array.isArray(saved)) return [];
+    return saved.map(value => typeof value === "string" ? { name: "", cities: value } : value)
+      .filter(value => value && typeof value.cities === "string" && parseCities(value.cities).size)
+      .map(value => ({ name: typeof value.name === "string" ? value.name.trim().slice(0, 80) : "", cities: value.cities }));
+  } catch {
+    return [];
+  }
+}
+
+function storeCityFilters(filters) {
+  try {
+    localStorage.setItem(SAVED_CITY_FILTERS_KEY, JSON.stringify(filters));
+    savedCityFilters = filters;
+    renderSavedCityFilters();
+    return true;
+  } catch {
+    citySaveStatus.textContent = "Couldn't save filters. Please try again.";
+    return false;
+  }
+}
+
+function cityFilterKey(cities) {
+  return JSON.stringify([...cities].sort());
+}
+
+function updateSavedCitySelection() {
+  const activeKey = cityFilterKey(activeCities);
+  for (const button of savedCities.querySelectorAll(".saved-city-restore")) {
+    button.setAttribute("aria-pressed", String(cityFilterKey(parseCities(savedCityFilters[Number(button.dataset.index)].cities)) === activeKey));
+  }
+}
+
+function renderSavedCityFilters() {
+  savedCities.replaceChildren();
+  savedCities.hidden = !savedCityFilters.length;
+  savedCityFilters.forEach((filter, index) => {
+    const value = filter.cities;
+    const cities = value.split(/[,;\n]+/).map(city => city.trim()).filter(Boolean);
+    const name = filter.name || cities[0] + (cities.length > 1 ? ` +${cities.length - 1}` : "");
+    const chip = document.createElement("div");
+    chip.className = "saved-city";
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "action-btn saved-city-restore";
+    restore.dataset.index = index;
+    restore.title = `${name}: ${cities.join(", ")}`;
+    restore.setAttribute("aria-label", `Apply saved filter ${name}: ${cities.join(", ")}`);
+    restore.innerHTML = ICON_PIN;
+    const label = document.createElement("span");
+    label.textContent = name;
+    restore.appendChild(label);
+    restore.addEventListener("click", () => {
+      if (!isSearchView()) return;
+      cityInput.value = value;
+      cityInput.setCustomValidity("");
+      activeCities = parseCities(value);
+      applyCityFilter();
+    });
+    const rename = document.createElement("button");
+    rename.type = "button";
+    rename.className = "action-btn saved-city-rename";
+    rename.title = "Rename saved filter";
+    rename.setAttribute("aria-label", `Rename saved filter ${name}`);
+    rename.innerHTML = ICON_EDIT;
+    rename.addEventListener("click", () => {
+      if (!isSearchView()) return;
+      renamingCityFilter = index;
+      cityNameInput.value = name;
+      cityNameInput.setCustomValidity("");
+      cityPresetInput.value = value;
+      cityPresetInput.readOnly = true;
+      cityPresetInput.setCustomValidity("");
+      citySave.textContent = "Save name";
+      cityEditor.hidden = false;
+      cityAdd.setAttribute("aria-expanded", "true");
+      citySaveStatus.textContent = "";
+      cityNameInput.focus();
+      cityNameInput.select();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "action-btn saved-city-remove";
+    remove.title = "Delete saved filter";
+    remove.setAttribute("aria-label", `Delete saved filter ${name}`);
+    remove.innerHTML = ICON_ERROR;
+    remove.addEventListener("click", () => {
+      if (storeCityFilters(savedCityFilters.filter((_, i) => i !== index))) {
+        if (!cityEditor.hidden) closeCityEditor();
+        citySaveStatus.textContent = "Filter deleted.";
+      }
+    });
+    chip.append(restore, rename, remove);
+    savedCities.appendChild(chip);
+  });
+  updateSavedCitySelection();
+}
+
+function closeCityEditor() {
+  renamingCityFilter = null;
+  cityEditor.hidden = true;
+  cityAdd.setAttribute("aria-expanded", "false");
+  cityPresetInput.setCustomValidity("");
+  cityPresetInput.readOnly = false;
+  cityNameInput.setCustomValidity("");
+  citySave.textContent = "Save filter";
+  cityAdd.focus();
+}
+
+cityAdd.addEventListener("click", () => {
+  if (!isSearchView()) return;
+  if (!cityEditor.hidden) { closeCityEditor(); return; }
+  renamingCityFilter = null;
+  cityNameInput.value = "";
+  cityNameInput.setCustomValidity("");
+  cityPresetInput.readOnly = false;
+  cityPresetInput.value = cityInput.value;
+  cityPresetInput.setCustomValidity("");
+  citySaveStatus.textContent = "";
+  cityEditor.hidden = false;
+  cityAdd.setAttribute("aria-expanded", "true");
+  cityPresetInput.focus();
+});
+cityCancel.addEventListener("click", closeCityEditor);
+cityEditor.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") { event.preventDefault(); closeCityEditor(); }
+});
+cityPresetInput.addEventListener("input", () => cityPresetInput.setCustomValidity(""));
+cityNameInput.addEventListener("input", () => cityNameInput.setCustomValidity(""));
+cityNameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); citySave.click(); }
+});
+citySave.addEventListener("click", () => {
+  if (!isSearchView()) return;
+  const name = cityNameInput.value.trim().slice(0, 80);
+  if (renamingCityFilter !== null) {
+    if (!name) {
+      cityNameInput.setCustomValidity("Enter a filter name.");
+      cityNameInput.reportValidity();
+      return;
+    }
+    if (storeCityFilters(savedCityFilters.map((filter, index) => index === renamingCityFilter ? { ...filter, name } : filter))) {
+      closeCityEditor();
+      citySaveStatus.textContent = "Filter renamed.";
+    }
+    return;
+  }
+  const value = cityPresetInput.value.trim();
+  const cities = parseCities(value);
+  if (!cities.size) {
+    cityPresetInput.setCustomValidity("Enter at least one city to save.");
+    cityPresetInput.reportValidity();
+    return;
+  }
+  if (savedCityFilters.some(saved => cityFilterKey(parseCities(saved.cities)) === cityFilterKey(cities))) {
+    citySaveStatus.textContent = "This city filter is already saved.";
+    return;
+  }
+  if (storeCityFilters([...savedCityFilters, { name, cities: value }])) {
+    closeCityEditor();
+    citySaveStatus.textContent = "Filter saved. Click its pin to apply it.";
+  }
+});
+renderSavedCityFilters();
 
 function normalizeCity(value) {
   return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -419,6 +637,7 @@ function applyCityFilter() {
     ? `${matching} of ${total} loaded jobs match · ${total - matching} hidden${unknown ? ` (${unknown} without a location)` : ""}`
     : "";
   if (cityStatus.textContent !== message) cityStatus.textContent = message;
+  updateSavedCitySelection();
 }
 
 cityInput.addEventListener("input", () => cityInput.setCustomValidity(""));
