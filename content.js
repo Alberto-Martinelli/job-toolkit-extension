@@ -407,6 +407,7 @@ const hiddenCityElements = new Map();
 const SAVED_CITY_FILTERS_KEY = "jobToolkitSavedCityFilters";
 let savedCityFilters = readSavedCityFilters();
 let renamingCityFilter = null;
+let renameNoticeTimer;
 
 function readSavedCityFilters() {
   try {
@@ -554,6 +555,10 @@ citySave.addEventListener("click", () => {
     if (storeCityFilters(savedCityFilters.map((filter, index) => index === renamingCityFilter ? { ...filter, name } : filter))) {
       closeCityEditor();
       citySaveStatus.textContent = "Filter renamed.";
+      clearTimeout(renameNoticeTimer);
+      renameNoticeTimer = setTimeout(() => {
+        if (citySaveStatus.textContent === "Filter renamed.") citySaveStatus.textContent = "";
+      }, 2000);
     }
     return;
   }
