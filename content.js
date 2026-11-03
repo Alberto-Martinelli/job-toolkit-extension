@@ -125,6 +125,7 @@ root.innerHTML = `
     outline: 2px solid #64748b; outline-offset: 2px;
   }
   .time-filter { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+  .time-filter[hidden] { display: none; }
   .time-label {
     color: #6b7280;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -160,7 +161,7 @@ root.innerHTML = `
     </div>
     <button class="action-btn copy-title-btn" aria-live="polite">${ICON_TITLE}<span>Copy title</span></button>
     <button class="action-btn copy-btn" aria-live="polite">${ICON_DESCRIPTION}<span>Copy job description</span></button>
-    <form class="time-filter">
+    <form class="time-filter" hidden>
       <label class="time-label" for="time-frame">Change time frame</label>
       <div class="time-row">
         <input id="time-frame" class="time-input" type="text" placeholder="e.g. 25 hours or 2 days" required autocomplete="off">
@@ -184,13 +185,49 @@ const timeForm = root.querySelector(".time-filter");
 const timeInput = root.querySelector(".time-input");
 
 // 2. Read page data
+function getDescriptionBox() {
+  // Search results contain other expandable blocks (profile matches, etc.).
+  const heading = [...document.querySelectorAll("h2")]
+    .find(el => el.textContent.trim().toLowerCase() === "about the job");
+  if (heading) {
+    for (let section = heading.parentElement; section; section = section.parentElement) {
+      const box = section.querySelector('[data-testid="expandable-text-box"]');
+      if (box) return box;
+    }
+  }
+  // Preserve the standalone job layout's existing lookup.
+  return isSearchView() ? null : document.querySelector('[data-testid="expandable-text-box"]');
+}
+
 function getDescription() {
-  const box = document.querySelector('[data-testid="expandable-text-box"]');
+  const box = getDescriptionBox();
   if (!box) return null;
   return box.innerText.replace(/…\s*more\s*$/, "").trim();
 }
 
 function getJobInfo() {
+  if (isSearchView()) {
+    const jobId = new URL(location.href).searchParams.get("currentJobId");
+    if (!jobId || !/^\d+$/.test(jobId)) return { title: "No job selected", company: "" };
+    const selector = `a[href*="/jobs/view/${jobId}/"], a[href$="/jobs/view/${jobId}"]`;
+    // Start at the description and walk up to the selected job's panel so a
+    // result card elsewhere on the page cannot supply another job's title.
+    const box = getDescriptionBox();
+    for (let scope = box?.parentElement || document; scope; scope = scope.parentElement) {
+      const link = [...scope.querySelectorAll(selector)]
+        .find(el => el.innerText.trim());
+      if (!link) continue;
+      let company = "";
+      for (let header = link.parentElement; header; header = header.parentElement) {
+        const companyLink = [...header.querySelectorAll('a[href*="/company/"]')]
+          .find(el => el.innerText.trim());
+        if (companyLink) { company = companyLink.innerText.trim(); break; }
+        if (header === scope) break;
+      }
+      return { title: link.innerText.trim(), company };
+    }
+    return { title: "No job selected", company: "" };
+  }
   // "(3) Job Title | Company | LinkedIn" -> ["Job Title", "Company", "LinkedIn"]
   const parts = document.title.replace(/^\(\d+\)\s*/, "").split(" | ");
   if (parts.length >= 3) return { title: parts[0], company: parts[1] };
@@ -239,7 +276,7 @@ function flash(btn, label, icon, error = "") {
 copyBtn.addEventListener("click", async () => {
   copyBtn.disabled = true;
   try {
-    const box = document.querySelector('[data-testid="expandable-text-box"]');
+    const box = getDescriptionBox();
     box?.querySelector('[data-testid="expandable-text-button"]')?.click();
     await new Promise(r => setTimeout(r, 300));
 
@@ -271,6 +308,10 @@ copyTitleBtn.addEventListener("click", async () => {
 });
 
 // Apply LinkedIn's posted-within filter, regardless of its position in the URL.
+function isSearchView() {
+  return /^\/jobs\/(?:search|search-results)\/?$/.test(location.pathname);
+}
+
 function parseTimeSeconds(value) {
   const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days)$/i);
   if (!match) return null;
@@ -282,6 +323,7 @@ function parseTimeSeconds(value) {
 timeInput.addEventListener("input", () => timeInput.setCustomValidity(""));
 timeForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  if (!isSearchView()) return;
   const seconds = parseTimeSeconds(timeInput.value);
   if (seconds === null) {
     timeInput.setCustomValidity("Enter a positive duration, such as 25 hours or 2 days.");
@@ -329,6 +371,7 @@ closeBtn.addEventListener("click", () => {
 function update() {
   const onJobs = location.pathname.startsWith("/jobs");
   host.style.display = onJobs && !closed ? "" : "none";
+  timeForm.hidden = !isSearchView();
   if (!onJobs && isOpen) closePanel();
 }
 
