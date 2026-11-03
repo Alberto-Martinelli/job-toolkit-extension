@@ -87,7 +87,7 @@ root.innerHTML = `
   .collapse:hover { color: #0a66c2; }
   .body {
     display: flex; flex-direction: column; gap: 12px;
-    padding: 0 12px;
+    padding: 0 12px 16px; overflow-y: auto;
   }
   .card {
     padding: 12px;
@@ -124,8 +124,8 @@ root.innerHTML = `
   .action-btn:focus-visible, .time-input:focus-visible {
     outline: 2px solid #64748b; outline-offset: 2px;
   }
-  .time-filter { display: flex; flex-direction: column; gap: 8px; margin: 0; }
-  .time-filter[hidden] { display: none; }
+  .time-filter, .city-filter { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+  .time-filter[hidden], .city-filter[hidden] { display: none; }
   .time-label {
     color: #6b7280;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -141,6 +141,10 @@ root.innerHTML = `
   }
   .time-input::placeholder { color: #9ca3af; opacity: 1; }
   .go-btn { width: 40px; padding: 0; justify-content: center; flex-shrink: 0; }
+  .city-input { flex: none; width: 100%; height: 80px; padding: 10px 12px; resize: vertical; line-height: 1.5; }
+  .city-actions { display: flex; gap: 6px; }
+  .city-actions .action-btn { flex: 1; justify-content: center; }
+  .city-hint, .city-status { margin: 0; color: #6b7280; font-size: 11px; line-height: 1.5; }
 </style>
 
 <div class="tab">
@@ -168,6 +172,16 @@ root.innerHTML = `
         <button class="action-btn go-btn" type="submit" aria-label="Apply time filter" title="Apply time filter">${ICON_ARROW}</button>
       </div>
     </form>
+    <form class="city-filter" hidden>
+      <label class="time-label" for="city-list">Filter by city</label>
+      <textarea id="city-list" class="time-input city-input" rows="3" placeholder="Milan, Athens, Berlin" aria-describedby="city-hint city-status" required></textarea>
+      <p id="city-hint" class="city-hint">Separate cities with commas or new lines. Filters loaded results only.</p>
+      <div class="city-actions">
+        <button class="action-btn" type="submit">Filter</button>
+        <button class="action-btn city-reset" type="button">Reset</button>
+      </div>
+      <p id="city-status" class="city-status" role="status" aria-live="polite"></p>
+    </form>
   </div>
 </div>`;
 
@@ -183,6 +197,10 @@ const companyEl = root.querySelector(".company");
 const copyTitleBtn = root.querySelector(".copy-title-btn");
 const timeForm = root.querySelector(".time-filter");
 const timeInput = root.querySelector(".time-input");
+const cityForm = root.querySelector(".city-filter");
+const cityInput = root.querySelector(".city-input");
+const cityReset = root.querySelector(".city-reset");
+const cityStatus = root.querySelector(".city-status");
 
 // 2. Read page data
 function getDescriptionBox() {
@@ -335,6 +353,94 @@ timeForm.addEventListener("submit", (event) => {
   location.assign(url.href);
 });
 
+// City filtering is local to loaded search results; it does not change LinkedIn's search.
+let activeCities = new Set();
+const hiddenCityElements = new Map();
+
+function normalizeCity(value) {
+  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function parseCities(value) {
+  return new Set(value.split(/[,;\n]+/).map(normalizeCity).filter(Boolean));
+}
+
+function getCardCity(card) {
+  // In the supplied cards, the title's wrapper, company row and location
+  // paragraph share one parent. Avoid generated CSS classes and other text
+  // such as the company name, salary badges and posting date.
+  const title = card.querySelector("p");
+  const metadata = title?.parentElement?.parentElement;
+  const location = metadata && [...metadata.children].find(el => el.tagName === "P");
+  if (!location) return "";
+  // Use textContent: innerText is unreliable once a card has been hidden.
+  return normalizeCity(location.textContent.replace(/\([^)]*\)/g, "").split(",")[0]);
+}
+
+function restoreCityElement(element, previous) {
+  if (previous.value) element.style.setProperty("display", previous.value, previous.priority);
+  else element.style.removeProperty("display");
+  hiddenCityElements.delete(element);
+}
+
+function applyCityFilter() {
+  const toHide = new Set();
+  let total = 0, matching = 0, unknown = 0;
+  if (isSearchView() && activeCities.size) {
+    const list = document.querySelector('[componentkey="SearchResultsMainContent"]');
+    for (const card of list?.querySelectorAll('[role="button"][componentkey^="job-card-component-ref-"]') || []) {
+      total++;
+      const city = getCardCity(card);
+      if (!city) unknown++;
+      if (city && activeCities.has(city)) { matching++; continue; }
+      // Hide the complete list item and its divider, without touching the
+      // selected job's detail panel or invoking LinkedIn's dismiss action.
+      let item = card;
+      while (item.parentElement && item.parentElement !== list) item = item.parentElement;
+      toHide.add(item);
+      if (item.nextElementSibling?.tagName === "HR") toHide.add(item.nextElementSibling);
+    }
+  }
+  for (const [element, previous] of hiddenCityElements) {
+    if (!toHide.has(element)) restoreCityElement(element, previous);
+  }
+  for (const element of toHide) {
+    if (!hiddenCityElements.has(element)) {
+      hiddenCityElements.set(element, {
+        value: element.style.getPropertyValue("display"),
+        priority: element.style.getPropertyPriority("display")
+      });
+    }
+    if (element.style.getPropertyValue("display") !== "none" || element.style.getPropertyPriority("display") !== "important") {
+      element.style.setProperty("display", "none", "important");
+    }
+  }
+  const message = activeCities.size && isSearchView()
+    ? `${matching} of ${total} loaded jobs match · ${total - matching} hidden${unknown ? ` (${unknown} without a location)` : ""}`
+    : "";
+  if (cityStatus.textContent !== message) cityStatus.textContent = message;
+}
+
+cityInput.addEventListener("input", () => cityInput.setCustomValidity(""));
+cityForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!isSearchView()) return;
+  const cities = parseCities(cityInput.value);
+  if (!cities.size) {
+    cityInput.setCustomValidity("Enter at least one city.");
+    cityInput.reportValidity();
+    return;
+  }
+  activeCities = cities;
+  applyCityFilter();
+});
+cityReset.addEventListener("click", () => {
+  activeCities.clear();
+  cityInput.value = "";
+  cityInput.setCustomValidity("");
+  applyCityFilter();
+});
+
 // 5. Drag the tab up and down
 const saved = localStorage.getItem("jdCopierTop");
 if (saved) tab.style.top = saved + "px";
@@ -372,6 +478,8 @@ function update() {
   const onJobs = location.pathname.startsWith("/jobs");
   host.style.display = onJobs && !closed ? "" : "none";
   timeForm.hidden = !isSearchView();
+  cityForm.hidden = !isSearchView();
+  applyCityFilter();
   if (!onJobs && isOpen) closePanel();
 }
 
@@ -383,4 +491,5 @@ setInterval(() => {
     update();
   }
   if (isOpen) refreshCard();   // LinkedIn updates the tab title a bit after the URL changes
+  if (activeCities.size) applyCityFilter(); // Include lazy-loaded or recycled cards.
 }, 500);
